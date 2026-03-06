@@ -337,6 +337,161 @@ with st.sidebar:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# OFFER ENGINE LOGIC
+# ══════════════════════════════════════════════════════════════════════════════
+
+def build_offers(age, income, family, ccavg, education, mortgage,
+                 sec_acc, cd_acc, online, credit_card, ensemble_prob):
+    """
+    Rule-based personalised offer engine.
+    Returns a list of offer dicts: {title, tag, desc, rate, cta, color, icon, priority_score}
+    Higher priority_score = more relevant to this customer.
+    """
+    edu_label = {1: "Undergrad", 2: "Graduate", 3: "Advanced"}[education]  # noqa: F841
+    offers = []
+
+    # ── 1. Core Personal Loan ──────────────────────────────────────────────
+    if income >= 100:
+        rate = "8.5% p.a."
+        limit = f"${min(income * 5, 500):.0f}K"
+        headline = "Premium Personal Loan"
+        desc = f"As a high-income earner (${income}K/yr), you qualify for our premium loan tier with a higher credit limit up to {limit} and preferential rate."
+    elif income >= 50:
+        rate = "10.5% p.a."
+        limit = f"${min(income * 4, 200):.0f}K"
+        headline = "Personal Loan — Standard"
+        desc = f"Based on your income profile (${income}K/yr), you are pre-approved for up to {limit} at a competitive rate."
+    else:
+        rate = "12.9% p.a."
+        limit = f"${min(income * 3, 80):.0f}K"
+        headline = "Starter Personal Loan"
+        desc = f"Kickstart your financial journey with a loan up to {limit}. Simple application, fast approval."
+    offers.append(dict(
+        title=headline, tag="PERSONAL LOAN", desc=desc,
+        rate=rate, cta="Apply Now →", color=ACCENT, icon="💳",
+        priority_score=ensemble_prob * 100,
+    ))
+
+    # ── 2. Home Loan / Mortgage top-up ────────────────────────────────────
+    if mortgage > 0:
+        top_up = min(mortgage * 0.3, 150)
+        offers.append(dict(
+            title="Mortgage Top-Up Loan",
+            tag="HOME LOAN",
+            desc=f"You already have a mortgage of ${mortgage}K with us. Unlock up to ${top_up:.0f}K additional funds at a lower rate than an unsecured loan — no new property valuation needed.",
+            rate="7.9% p.a.",
+            cta="Check Eligibility →",
+            color=BLUE,
+            icon="🏠",
+            priority_score=70 + (mortgage / 635) * 20,
+        ))
+    elif income >= 60 and age >= 28:
+        offers.append(dict(
+            title="First Home Buyer Loan",
+            tag="HOME LOAN",
+            desc=f"At ${income}K income and age {age}, you may qualify for our First Home Buyer package — up to ${min(income*6, 800):.0f}K with a 10% deposit option and waived processing fees.",
+            rate="8.2% p.a.",
+            cta="Get Pre-Approved →",
+            color=BLUE,
+            icon="🏠",
+            priority_score=55,
+        ))
+
+    # ── 3. Credit Card upgrade ────────────────────────────────────────────
+    if credit_card == 0 and ccavg >= 2:
+        offers.append(dict(
+            title="UniversalBank Rewards Card",
+            tag="CREDIT CARD",
+            desc=f"You spend ~${ccavg}K/month on cards but don't hold our card yet. Switch and earn 3× reward points on every purchase, plus a 0% balance transfer for 12 months.",
+            rate="0% for 12 months",
+            cta="Get the Card →",
+            color=YELLOW,
+            icon="✨",
+            priority_score=50 + ccavg * 5,
+        ))
+    elif credit_card == 1 and ccavg >= 3:
+        offers.append(dict(
+            title="Platinum Card Upgrade",
+            tag="CREDIT CARD",
+            desc=f"Your spending of ${ccavg}K/month qualifies you for our Platinum tier — airport lounge access, 5× points on travel & dining, and a ${min(int(ccavg*5), 50)},000 higher credit limit.",
+            rate="Existing card rate",
+            cta="Upgrade Now →",
+            color=YELLOW,
+            icon="💎",
+            priority_score=55 + ccavg * 4,
+        ))
+
+    # ── 4. Savings / Investment ───────────────────────────────────────────
+    if sec_acc == 0 and income >= 70:
+        offers.append(dict(
+            title="Securities & Investments Account",
+            desc=f"Grow your wealth. At ${income}K income you have surplus capacity to invest. Open a securities account with zero brokerage for the first 6 months and access to 3,000+ listed securities.",
+            tag="INVESTMENTS",
+            rate="0% brokerage · 6 months",
+            cta="Start Investing →",
+            color=GREEN,
+            icon="📈",
+            priority_score=40 + (income / 224) * 20,
+        ))
+
+    if cd_acc == 0:
+        cd_rate = "5.8%" if income >= 80 else "5.2%"
+        offers.append(dict(
+            title="Certificate of Deposit",
+            tag="SAVINGS",
+            desc=f"Lock in a guaranteed {cd_rate} p.a. return. Ideal for parking funds you won't need for 12–24 months. FDIC insured, no market risk.",
+            rate=f"{cd_rate} p.a. guaranteed",
+            cta="Open CD Account →",
+            color=GREEN,
+            icon="🏦",
+            priority_score=35,
+        ))
+
+    # ── 5. Digital / Online banking ───────────────────────────────────────
+    if online == 0:
+        offers.append(dict(
+            title="Go Digital — Bonus Offer",
+            tag="DIGITAL BANKING",
+            desc="Activate online banking and get $50 cashback on your first digital transaction, plus fee-free NEFT/RTGS transfers for 6 months. Manage everything from your phone.",
+            rate="$50 cashback",
+            cta="Activate Now →",
+            color="#A29BFE",
+            icon="📱",
+            priority_score=30,
+        ))
+
+    # ── 6. Family / Education loan ────────────────────────────────────────
+    if family >= 3 and education <= 2:
+        offers.append(dict(
+            title="Family Education Loan",
+            tag="EDUCATION LOAN",
+            desc=f"With a family of {family}, education planning is key. Get up to $50K at a subsidised rate to fund higher education — deferred repayment until course completion.",
+            rate="6.9% p.a. subsidised",
+            cta="Learn More →",
+            color="#FD79A8",
+            icon="🎓",
+            priority_score=38,
+        ))
+
+    # ── 7. Retirement / Wealth planning ──────────────────────────────────
+    if age >= 45 and income >= 80:
+        offers.append(dict(
+            title="Wealth Management Advisory",
+            tag="WEALTH",
+            desc=f"At {age} with ${income}K income, retirement planning is critical. Our advisors can build a customised portfolio blending fixed income, equities, and tax-efficient instruments.",
+            rate="Free first consultation",
+            cta="Book a Session →",
+            color="#FF9F43",
+            icon="🌟",
+            priority_score=45,
+        ))
+
+    # Sort by priority descending
+    offers.sort(key=lambda o: o["priority_score"], reverse=True)
+    return offers
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PAGE: OVERVIEW & EDA
 # ══════════════════════════════════════════════════════════════════════════════
 if page == "📊 Overview & EDA":
@@ -736,159 +891,6 @@ elif page == "🔍 Feature Analysis":
                           yaxis_title=feat_sel, height=340)
         st.plotly_chart(fig, use_container_width=True)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# OFFER ENGINE LOGIC
-# ══════════════════════════════════════════════════════════════════════════════
-def build_offers(age, income, family, ccavg, education, mortgage,
-                 sec_acc, cd_acc, online, credit_card, ensemble_prob):
-    """
-    Rule-based personalised offer engine.
-    Returns a list of offer dicts: {title, tag, desc, rate, cta, color, icon, priority_score}
-    Higher priority_score = more relevant to this customer.
-    """
-    edu_label = {1: "Undergrad", 2: "Graduate", 3: "Advanced"}[education]
-    offers = []
-
-    # ── 1. Core Personal Loan ──────────────────────────────────────────────
-    if income >= 100:
-        rate = "8.5% p.a."
-        limit = f"${min(income * 5, 500):.0f}K"
-        headline = "Premium Personal Loan"
-        desc = f"As a high-income earner (${income}K/yr), you qualify for our premium loan tier with a higher credit limit up to {limit} and preferential rate."
-    elif income >= 50:
-        rate = "10.5% p.a."
-        limit = f"${min(income * 4, 200):.0f}K"
-        headline = "Personal Loan — Standard"
-        desc = f"Based on your income profile (${income}K/yr), you are pre-approved for up to {limit} at a competitive rate."
-    else:
-        rate = "12.9% p.a."
-        limit = f"${min(income * 3, 80):.0f}K"
-        headline = "Starter Personal Loan"
-        desc = f"Kickstart your financial journey with a loan up to {limit}. Simple application, fast approval."
-    offers.append(dict(
-        title=headline, tag="PERSONAL LOAN", desc=desc,
-        rate=rate, cta="Apply Now →", color=ACCENT, icon="💳",
-        priority_score=ensemble_prob * 100,
-    ))
-
-    # ── 2. Home Loan / Mortgage top-up ────────────────────────────────────
-    if mortgage > 0:
-        top_up = min(mortgage * 0.3, 150)
-        offers.append(dict(
-            title="Mortgage Top-Up Loan",
-            tag="HOME LOAN",
-            desc=f"You already have a mortgage of ${mortgage}K with us. Unlock up to ${top_up:.0f}K additional funds at a lower rate than an unsecured loan — no new property valuation needed.",
-            rate="7.9% p.a.",
-            cta="Check Eligibility →",
-            color=BLUE,
-            icon="🏠",
-            priority_score=70 + (mortgage / 635) * 20,
-        ))
-    elif income >= 60 and age >= 28:
-        offers.append(dict(
-            title="First Home Buyer Loan",
-            tag="HOME LOAN",
-            desc=f"At ${income}K income and age {age}, you may qualify for our First Home Buyer package — up to ${min(income*6, 800):.0f}K with a 10% deposit option and waived processing fees.",
-            rate="8.2% p.a.",
-            cta="Get Pre-Approved →",
-            color=BLUE,
-            icon="🏠",
-            priority_score=55,
-        ))
-
-    # ── 3. Credit Card upgrade ────────────────────────────────────────────
-    if credit_card == 0 and ccavg >= 2:
-        offers.append(dict(
-            title="UniversalBank Rewards Card",
-            tag="CREDIT CARD",
-            desc=f"You spend ~${ccavg}K/month on cards but don't hold our card yet. Switch and earn 3× reward points on every purchase, plus a 0% balance transfer for 12 months.",
-            rate="0% for 12 months",
-            cta="Get the Card →",
-            color=YELLOW,
-            icon="✨",
-            priority_score=50 + ccavg * 5,
-        ))
-    elif credit_card == 1 and ccavg >= 3:
-        offers.append(dict(
-            title="Platinum Card Upgrade",
-            tag="CREDIT CARD",
-            desc=f"Your spending of ${ccavg}K/month qualifies you for our Platinum tier — airport lounge access, 5× points on travel & dining, and a ${min(int(ccavg*5), 50)},000 higher credit limit.",
-            rate="Existing card rate",
-            cta="Upgrade Now →",
-            color=YELLOW,
-            icon="💎",
-            priority_score=55 + ccavg * 4,
-        ))
-
-    # ── 4. Savings / Investment ───────────────────────────────────────────
-    if sec_acc == 0 and income >= 70:
-        offers.append(dict(
-            title="Securities & Investments Account",
-            desc=f"Grow your wealth. At ${income}K income you have surplus capacity to invest. Open a securities account with zero brokerage for the first 6 months and access to 3,000+ listed securities.",
-            tag="INVESTMENTS",
-            rate="0% brokerage · 6 months",
-            cta="Start Investing →",
-            color=GREEN,
-            icon="📈",
-            priority_score=40 + (income / 224) * 20,
-        ))
-
-    if cd_acc == 0:
-        cd_rate = "5.8%" if income >= 80 else "5.2%"
-        offers.append(dict(
-            title="Certificate of Deposit",
-            tag="SAVINGS",
-            desc=f"Lock in a guaranteed {cd_rate} p.a. return. Ideal for parking funds you won't need for 12–24 months. FDIC insured, no market risk.",
-            rate=f"{cd_rate} p.a. guaranteed",
-            cta="Open CD Account →",
-            color=GREEN,
-            icon="🏦",
-            priority_score=35,
-        ))
-
-    # ── 5. Digital / Online banking ───────────────────────────────────────
-    if online == 0:
-        offers.append(dict(
-            title="Go Digital — Bonus Offer",
-            tag="DIGITAL BANKING",
-            desc="Activate online banking and get $50 cashback on your first digital transaction, plus fee-free NEFT/RTGS transfers for 6 months. Manage everything from your phone.",
-            rate="$50 cashback",
-            cta="Activate Now →",
-            color="#A29BFE",
-            icon="📱",
-            priority_score=30,
-        ))
-
-    # ── 6. Family / Education loan ────────────────────────────────────────
-    if family >= 3 and education <= 2:
-        offers.append(dict(
-            title="Family Education Loan",
-            tag="EDUCATION LOAN",
-            desc=f"With a family of {family}, education planning is key. Get up to $50K at a subsidised rate to fund higher education — deferred repayment until course completion.",
-            rate="6.9% p.a. subsidised",
-            cta="Learn More →",
-            color="#FD79A8",
-            icon="🎓",
-            priority_score=38,
-        ))
-
-    # ── 7. Retirement / Wealth planning ──────────────────────────────────
-    if age >= 45 and income >= 80:
-        offers.append(dict(
-            title="Wealth Management Advisory",
-            tag="WEALTH",
-            desc=f"At {age} with ${income}K income, retirement planning is critical. Our advisors can build a customised portfolio blending fixed income, equities, and tax-efficient instruments.",
-            rate="Free first consultation",
-            cta="Book a Session →",
-            color="#FF9F43",
-            icon="🌟",
-            priority_score=45,
-        ))
-
-    # Sort by priority descending
-    offers.sort(key=lambda o: o["priority_score"], reverse=True)
-    return offers
 
 
 # ══════════════════════════════════════════════════════════════════════════════
